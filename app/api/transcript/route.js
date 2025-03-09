@@ -1,5 +1,8 @@
 import { YoutubeTranscript } from "youtube-transcript";
 
+// Specify Node.js runtime
+export const runtime = "nodejs";
+
 function decodeHtmlEntities(text) {
   const entities = {
     "&amp;": "&",
@@ -72,10 +75,17 @@ export async function POST(request) {
       },
     });
   } catch (error) {
-    console.error("Transcript fetch error:", error);
+    console.error("Transcript fetch error:", {
+      message: error.message,
+      stack: error.stack,
+      videoId,
+      url,
+    });
     return new Response(
       JSON.stringify({
-        error: error.message || "Failed to fetch transcript",
+        error: `Failed to fetch transcript: ${error.message}`,
+        details:
+          process.env.NODE_ENV === "development" ? error.stack : undefined,
       }),
       {
         status: 500,

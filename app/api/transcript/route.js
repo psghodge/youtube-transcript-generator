@@ -35,10 +35,17 @@ function decodeHtmlEntities(text) {
 }
 
 export async function POST(request) {
+  let videoId = null;
+  let requestUrl = null;
+
   try {
     const { url } = await request.json();
+    requestUrl = url;
+
+    console.log("Processing request for URL:", url);
 
     if (!url) {
+      console.log("URL is missing in request");
       return new Response(JSON.stringify({ error: "URL is required" }), {
         status: 400,
         headers: {
@@ -48,11 +55,15 @@ export async function POST(request) {
     }
 
     // Extract video ID from URL
-    const videoId = url.match(
+    const matches = url.match(
       /(?:youtu\.be\/|youtube\.com(?:\/embed\/|\/v\/|\/watch\?v=|\/watch\?.+&v=))([^"&?\/\s]{11})/
-    )?.[1];
+    );
+
+    videoId = matches?.[1];
+    console.log("Extracted video ID:", videoId);
 
     if (!videoId) {
+      console.log("Invalid YouTube URL format");
       return new Response(JSON.stringify({ error: "Invalid YouTube URL" }), {
         status: 400,
         headers: {
@@ -61,8 +72,14 @@ export async function POST(request) {
       });
     }
 
+    console.log("Fetching transcript for video ID:", videoId);
     // Fetch transcript
     const transcriptList = await YoutubeTranscript.fetchTranscript(videoId);
+    console.log(
+      "Transcript fetched successfully, items:",
+      transcriptList.length
+    );
+
     const rawTranscript = transcriptList.map((item) => item.text).join(" ");
 
     // Decode HTML entities in the transcript
@@ -77,15 +94,30 @@ export async function POST(request) {
   } catch (error) {
     console.error("Transcript fetch error:", {
       message: error.message,
+      name: error.name,
       stack: error.stack,
-      videoId,
-      url,
+      videoId: videoId, // Now videoId is in scope
+      requestUrl: requestUrl, // Original URL for debugging
+      environment: process.env.NODE_ENV,
+      runtime: process.env.VERCEL ? "vercel" : "local",
     });
+
+    // Determine if it's a known error type
+    const errorMessage = error.message.includes("could not get transcripts")
+      ? "Transcript is not available for this video"
+      : `Failed to fetch transcript: ${error.message}`;
+
     return new Response(
       JSON.stringify({
-        error: `Failed to fetch transcript: ${error.message}`,
+        error: errorMessage,
         details:
-          process.env.NODE_ENV === "development" ? error.stack : undefined,
+          process.env.NODE_ENV === "development"
+            ? {
+                stack: error.stack,
+                videoId: videoId,
+                url: requestUrl,
+              }
+            : undefined,
       }),
       {
         status: 500,

@@ -22,7 +22,7 @@ const Navbar = () => {
             href="/"
             className="text-xl font-bold text-blue-600 hover:text-blue-700"
           >
-            YouTube Transcript
+            YouTube Transcript Generator
           </Link>
 
           <div className="flex items-center space-x-4">

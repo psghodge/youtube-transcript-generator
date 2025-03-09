@@ -9,15 +9,36 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@radix-ui/react-slot": "^1.1.2",
+    "assert": "^2.1.0",
+    "browserify-zlib": "^0.2.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "crypto-browserify": "^3.12.1",
+    "firebase": "^11.4.0",
+    "https-browserify": "^1.0.0",
+    "lucide-react": "^0.477.0",
+    "next": "15.2.1",
+    "openai": "^4.86.2",
+    "os-browserify": "^0.3.0",
+    "path-browserify": "^1.0.1",
+    "process": "^0.11.10",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "next": "15.2.1"
+    "react-markdown": "^10.1.0",
+    "stream-browserify": "^3.0.0",
+    "stream-http": "^3.2.0",
+    "tailwind-merge": "^3.0.2",
+    "tailwindcss-animate": "^1.0.7",
+    "url": "^0.11.4",
+    "youtube-transcript": "^1.2.1"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
-    "tailwindcss": "^4",
+    "@tailwindcss/typography": "^0.5.16",
     "eslint": "^9",
     "eslint-config-next": "15.2.1",
-    "@eslint/eslintrc": "^3"
+    "tailwindcss": "^4"
   }
 }

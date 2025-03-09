@@ -1,0 +1,145 @@
+# Cursor Rules for Next.js Responsive Web Application
+
+# ============================================
+
+## GENERAL CONFIGURATION
+
+- Use **Next.js** with the **App Router** (not the Pages Router).
+- Do NOT use a `src/` folder. All code resides in the root directory.
+- Use **JavaScript** (`.js` and `.jsx`) for all files. TypeScript is not required.
+- Use **ES6 imports** (ES Modules). Avoid `require` and `module.exports`.
+- When generating code, the AI agent must ensure that **UI elements, hooks, and utility functions are separated into appropriate files** rather than mixing them within the same file (e.g., `page.jsx`).
+
+## FOLDER STRUCTURE
+
+- Refer to `folderStructure.md` for detailed folder organization.
+
+## FILE NAMING CONVENTIONS
+
+- Use `.jsx` for files containing JSX elements. Use `.js` for logic-only files.
+- Use `camelCase` for file and folder names (e.g., `firebaseConfig.js`, `useAuth.js`).
+- Name components in **PascalCase** (e.g., `Navbar.jsx`, `Footer.jsx`).
+
+## COMPONENTS
+
+- Place reusable components in the `components/` folder (outside the `app/` folder).
+- Organize feature-specific components into subfolders within `components/`.
+- Components must be functional components and use the `function` keyword.
+- Export components using named exports:
+  ```javascript
+  export function MyComponent() {
+    return <div>Content</div>;
+  }
+  ```
+- **Refactoring Rule:** If a component file exceeds **300 lines**, split it into multiple components.
+
+## STYLING
+
+- Use **Tailwind CSS** for all styling. Avoid inline styles or external CSS files.
+- Use **ShadCN UI** for reusable components integrated with Tailwind CSS.
+- Ensure all designs are fully responsive for mobile, tablet, and desktop devices.
+- Apply utility-first classes for layout and styling. Avoid complex custom CSS where possible.
+
+## SHADCN UI CONFIGURATION
+
+- Install ShadCN UI using:
+  ```bash
+  npx shadcn@latest init
+  ```
+- Store all ShadCN UI components inside `components/ui/`.
+- Ensure the `shadcn.json` file exists in the project root:
+  ```json
+  {
+    "$schema": "https://shadcn.dev/schema.json",
+    "style": "default",
+    "tailwind": true,
+    "rsc": false,
+    "tsx": true,
+    "alias": "@/components/ui",
+    "importAlias": "@/components/ui",
+    "components": []
+  }
+  ```
+- Add ShadCN components using:
+  ```bash
+  eg: accordion
+  npx shadcn@latest add accordion (install 1 component at a time)
+  ```
+- Modify and extend ShadCN components directly inside `components/ui/`.
+  Note: npx shadcn-ui@latest is the old syntax (do not use this)
+
+## FIREBASE INTEGRATION
+
+- Place Firebase files in the `lib/firebase/` folder:
+  - `firebase.js`: Firebase initialization.
+  - `firebaseUtils.js`: Helper functions for Firebase operations.
+- Use environment variables for Firebase configuration.
+
+## CUSTOM HOOKS
+
+- Place all custom hooks in the `hooks/` folder.
+- Hooks must follow the **`useSomething`** naming convention:
+  ```javascript
+  export function useAuth() {
+    // Custom hook logic
+  }
+  ```
+- **Refactoring Rule:** If a file contains both a component and a hook, separate them into different files inside `components/` and `hooks/`.
+
+## API ROUTES
+
+- Place API routes in the `app/api/` folder.
+- Each route should have its own folder and a `route.js` file.
+
+## UTILITIES
+
+- Place general-purpose utility functions in the `utils/` folder.
+- Use `camelCase` for function names (e.g., `formatDate`).
+- Example utility:
+  ```javascript
+  export function formatDate(date) {
+    return date.toISOString();
+  }
+  ```
+- **Refactoring Rule:** If a file contains both utility functions and a component, move the utilities to `utils/` and import them where needed.
+
+## DATABASE LOGIC
+
+- Place database models in the `database/models/` folder.
+- Place database connection logic in `database/db.js`.
+
+## ENVIRONMENT VARIABLES
+
+- Use environment variables for sensitive data and API keys.
+- We will use Replit for deployment and will store environment variables/API keys in Replit secrets.
+
+## CODING STYLE
+
+- Use **ESLint** and **Prettier** for code linting and formatting.
+- Follow these guidelines:
+  - Use **2 spaces** for indentation.
+  - Use **single quotes ('')** for strings.
+  - Always add **semicolons (`;`)** at the end of statements.
+  - Use **async/await** for asynchronous logic. Avoid `.then()` chaining.
+
+## ERROR HANDLING
+
+- Add **detailed console log statements** for debugging and error handling.
+- Ensure **all errors are logged**, and where necessary, provide fallback UI or retry logic.
+
+## REFACTORING GUIDELINES
+
+- **Avoid bloated files:** If a `page.jsx` file exceeds **300 lines**, extract components, hooks, or utilities.
+- **Separate concerns:** Ensure that UI elements, hooks, and utility functions are in their respective files instead of mixed in one large file.
+- **Move reusable functions:** Utility functions should be in `utils/`.
+- **Preserve imports:** Ensure extracted components or hooks are properly imported.
+- **Stateful logic:** Move complex state logic into custom hooks inside `hooks/`.
+- **Test in small steps:** When refactoring, test each change before moving to the next.
+
+## ADDITIONAL REQUIREMENTS
+
+- Use the existing `components/` folder for UI components; do not create a new one.
+- Avoid unnecessary duplicate code.
+- Remove **unused JavaScript, HTML, and CSS** when making changes.
+- Ensure `next.config.mjs` is updated for any added functionality.
+- The application must be **fully responsive**, with layouts optimized for mobile, tablet, and desktop.

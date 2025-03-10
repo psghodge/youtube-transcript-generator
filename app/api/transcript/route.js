@@ -1,5 +1,7 @@
-import { getSubtitles } from "youtube-caption-extractor";
-import { headers } from "next/headers";
+import { google } from "googleapis";
+
+// Initialize the YouTube API client
+const youtube = google.youtube("v3");
 
 // Specify Node.js runtime with increased timeout
 export const runtime = "nodejs";
@@ -20,166 +22,96 @@ export async function OPTIONS() {
   });
 }
 
-function decodeHtmlEntities(text) {
-  const entities = {
-    "&amp;": "&",
-    "&lt;": "<",
-    "&gt;": ">",
-    "&quot;": '"',
-    "&#39;": "'",
-    "&apos;": "'",
-    "&rsquo;": "'",
-    "&lsquo;": "'",
-    "&rdquo;": '"',
-    "&ldquo;": '"',
-    "&nbsp;": " ",
-  };
-
-  // Replace named entities
-  let decodedText = text;
-  for (const [entity, char] of Object.entries(entities)) {
-    decodedText = decodedText.replace(new RegExp(entity, "g"), char);
-  }
-
-  // Replace numeric entities (decimal and hexadecimal)
-  decodedText = decodedText
-    .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(dec))
-    .replace(/&#x([0-9A-F]+);/gi, (_, hex) =>
-      String.fromCharCode(parseInt(hex, 16))
-    );
-
-  return decodedText;
+function extractVideoId(url) {
+  const matches = url.match(
+    /(?:youtu\.be\/|youtube\.com(?:\/embed\/|\/v\/|\/watch\?v=|\/watch\?.+&v=))([^"&?\/\s]{11})/
+  );
+  return matches?.[1];
 }
 
 export async function POST(request) {
-  let videoId = null;
-  let requestUrl = null;
-
-  // Add CORS headers to all responses
-  const responseHeaders = {
-    "Content-Type": "application/json",
-    ...corsHeaders,
-  };
+  if (!process.env.YOUTUBE_API_KEY) {
+    return new Response(
+      JSON.stringify({ error: "YouTube API key not configured" }),
+      { status: 500, headers: corsHeaders }
+    );
+  }
 
   try {
     const { url } = await request.json();
-    requestUrl = url;
-
-    console.log("Processing request for URL:", url);
-
-    if (!url) {
-      console.log("URL is missing in request");
-      return new Response(JSON.stringify({ error: "URL is required" }), {
-        status: 400,
-        headers: responseHeaders,
-      });
-    }
-
-    // Extract video ID from URL
-    const matches = url.match(
-      /(?:youtu\.be\/|youtube\.com(?:\/embed\/|\/v\/|\/watch\?v=|\/watch\?.+&v=))([^"&?\/\s]{11})/
-    );
-
-    videoId = matches?.[1];
-    console.log("Extracted video ID:", videoId);
+    const videoId = extractVideoId(url);
 
     if (!videoId) {
-      console.log("Invalid YouTube URL format");
       return new Response(JSON.stringify({ error: "Invalid YouTube URL" }), {
         status: 400,
-        headers: responseHeaders,
+        headers: corsHeaders,
       });
     }
 
-    console.log("Fetching transcript for video ID:", videoId);
+    // Get caption tracks
+    const captionResponse = await youtube.captions.list({
+      key: process.env.YOUTUBE_API_KEY,
+      part: "snippet",
+      videoId: videoId,
+    });
 
-    // Try multiple language options with timeout
-    const languagesToTry = ["en", "en-US", "en-GB", ""];
-    let subtitles = null;
-    let lastError = null;
-
-    for (const lang of languagesToTry) {
-      try {
-        // Add timeout to prevent hanging
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("Request timeout")), 5000)
-        );
-
-        const subtitlesPromise = getSubtitles({
-          videoID: videoId,
-          lang: lang,
-        });
-
-        subtitles = await Promise.race([subtitlesPromise, timeoutPromise]);
-
-        if (subtitles && subtitles.length > 0) {
-          break;
-        }
-      } catch (e) {
-        lastError = e;
-        console.log(`Failed to fetch with language ${lang}:`, e.message);
-        continue;
-      }
+    const captionTracks = captionResponse.data.items || [];
+    if (captionTracks.length === 0) {
+      throw new Error("No captions available for this video");
     }
 
-    if (!subtitles || subtitles.length === 0) {
-      throw new Error(
-        lastError?.message || "No transcript available for this video"
-      );
+    // Find English captions, preferring manual over auto-generated
+    const selectedTrack =
+      captionTracks.find(
+        (track) =>
+          track.snippet.language === "en" && !track.snippet.trackKind === "ASR"
+      ) || captionTracks.find((track) => track.snippet.language === "en");
+
+    if (!selectedTrack) {
+      throw new Error("No English captions available for this video");
     }
 
-    console.log("Transcript fetched successfully, items:", subtitles.length);
+    // Download the caption track
+    const transcriptResponse = await youtube.captions.download({
+      key: process.env.YOUTUBE_API_KEY,
+      id: selectedTrack.id,
+      tfmt: "srt", // Request transcript in SRT format
+    });
 
-    // Combine all subtitle texts with proper spacing
-    const rawTranscript = subtitles
-      .map((item) => item.text.trim())
-      .filter((text) => text.length > 0)
-      .join(" ");
-
-    // Decode HTML entities in the transcript
-    const transcript = decodeHtmlEntities(rawTranscript);
+    // Clean up the SRT format to get plain text
+    const transcript = transcriptResponse.data
+      .replace(
+        /\d+\n\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}\n/g,
+        ""
+      )
+      .replace(/\n\n/g, " ")
+      .trim();
 
     return new Response(JSON.stringify({ transcript }), {
       status: 200,
-      headers: responseHeaders,
+      headers: corsHeaders,
     });
   } catch (error) {
     console.error("Transcript fetch error:", {
       message: error.message,
       name: error.name,
-      stack: error.stack,
-      videoId: videoId,
-      requestUrl: requestUrl,
       environment: process.env.NODE_ENV,
-      runtime: process.env.VERCEL ? "vercel" : "local",
     });
 
-    // Provide a user-friendly error message
     const userMessage =
       "This video's transcript cannot be accessed. This could be because:\n" +
       "1. The video doesn't have captions enabled\n" +
-      "2. The captions are auto-generated\n" +
+      "2. The captions are not available in English\n" +
       "3. The video owner has disabled transcript access\n" +
-      "4. The video might be region-restricted or private\n" +
-      "5. The request timed out\n\n" +
-      "Please try a different video that has manual captions enabled.";
+      "4. The video might be region-restricted or private";
 
     return new Response(
       JSON.stringify({
         error: userMessage,
         details:
-          process.env.NODE_ENV === "development"
-            ? {
-                stack: error.stack,
-                videoId: videoId,
-                url: requestUrl,
-              }
-            : undefined,
+          process.env.NODE_ENV === "development" ? error.message : undefined,
       }),
-      {
-        status: 500,
-        headers: responseHeaders,
-      }
+      { status: 500, headers: corsHeaders }
     );
   }
 }

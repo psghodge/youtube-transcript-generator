@@ -1,4 +1,4 @@
-import { YoutubeTranscript } from "youtube-transcript";
+import { getSubtitles } from "youtube-caption-extractor";
 
 // Specify Node.js runtime
 export const runtime = "nodejs";
@@ -73,14 +73,21 @@ export async function POST(request) {
     }
 
     console.log("Fetching transcript for video ID:", videoId);
-    // Fetch transcript
-    const transcriptList = await YoutubeTranscript.fetchTranscript(videoId);
-    console.log(
-      "Transcript fetched successfully, items:",
-      transcriptList.length
-    );
 
-    const rawTranscript = transcriptList.map((item) => item.text).join(" ");
+    // Fetch transcript using youtube-caption-extractor
+    const subtitles = await getSubtitles({
+      videoID: videoId,
+      lang: "en", // Try English first
+    });
+
+    if (!subtitles || subtitles.length === 0) {
+      throw new Error("No transcript available for this video");
+    }
+
+    console.log("Transcript fetched successfully, items:", subtitles.length);
+
+    // Combine all subtitle texts
+    const rawTranscript = subtitles.map((item) => item.text).join(" ");
 
     // Decode HTML entities in the transcript
     const transcript = decodeHtmlEntities(rawTranscript);
@@ -96,20 +103,23 @@ export async function POST(request) {
       message: error.message,
       name: error.name,
       stack: error.stack,
-      videoId: videoId, // Now videoId is in scope
-      requestUrl: requestUrl, // Original URL for debugging
+      videoId: videoId,
+      requestUrl: requestUrl,
       environment: process.env.NODE_ENV,
       runtime: process.env.VERCEL ? "vercel" : "local",
     });
 
-    // Determine if it's a known error type
-    const errorMessage = error.message.includes("could not get transcripts")
-      ? "Transcript is not available for this video"
-      : `Failed to fetch transcript: ${error.message}`;
+    // Provide a user-friendly error message
+    const userMessage =
+      "This video's transcript cannot be accessed. This could be because:\n" +
+      "1. The video doesn't have captions enabled\n" +
+      "2. The captions are auto-generated\n" +
+      "3. The video owner has disabled transcript access\n\n" +
+      "Please try a different video that has manual captions enabled.";
 
     return new Response(
       JSON.stringify({
-        error: errorMessage,
+        error: userMessage,
         details:
           process.env.NODE_ENV === "development"
             ? {

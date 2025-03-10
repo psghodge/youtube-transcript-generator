@@ -1,7 +1,24 @@
 import { getSubtitles } from "youtube-caption-extractor";
+import { headers } from "next/headers";
 
-// Specify Node.js runtime
+// Specify Node.js runtime with increased timeout
 export const runtime = "nodejs";
+export const maxDuration = 10; // Set maximum duration to 10 seconds
+
+// Add CORS headers
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
+// Handle OPTIONS request for CORS
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: corsHeaders,
+  });
+}
 
 function decodeHtmlEntities(text) {
   const entities = {
@@ -38,6 +55,12 @@ export async function POST(request) {
   let videoId = null;
   let requestUrl = null;
 
+  // Add CORS headers to all responses
+  const responseHeaders = {
+    "Content-Type": "application/json",
+    ...corsHeaders,
+  };
+
   try {
     const { url } = await request.json();
     requestUrl = url;
@@ -48,9 +71,7 @@ export async function POST(request) {
       console.log("URL is missing in request");
       return new Response(JSON.stringify({ error: "URL is required" }), {
         status: 400,
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: responseHeaders,
       });
     }
 
@@ -66,37 +87,61 @@ export async function POST(request) {
       console.log("Invalid YouTube URL format");
       return new Response(JSON.stringify({ error: "Invalid YouTube URL" }), {
         status: 400,
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: responseHeaders,
       });
     }
 
     console.log("Fetching transcript for video ID:", videoId);
 
-    // Fetch transcript using youtube-caption-extractor
-    const subtitles = await getSubtitles({
-      videoID: videoId,
-      lang: "en", // Try English first
-    });
+    // Try multiple language options with timeout
+    const languagesToTry = ["en", "en-US", "en-GB", ""];
+    let subtitles = null;
+    let lastError = null;
+
+    for (const lang of languagesToTry) {
+      try {
+        // Add timeout to prevent hanging
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Request timeout")), 5000)
+        );
+
+        const subtitlesPromise = getSubtitles({
+          videoID: videoId,
+          lang: lang,
+        });
+
+        subtitles = await Promise.race([subtitlesPromise, timeoutPromise]);
+
+        if (subtitles && subtitles.length > 0) {
+          break;
+        }
+      } catch (e) {
+        lastError = e;
+        console.log(`Failed to fetch with language ${lang}:`, e.message);
+        continue;
+      }
+    }
 
     if (!subtitles || subtitles.length === 0) {
-      throw new Error("No transcript available for this video");
+      throw new Error(
+        lastError?.message || "No transcript available for this video"
+      );
     }
 
     console.log("Transcript fetched successfully, items:", subtitles.length);
 
-    // Combine all subtitle texts
-    const rawTranscript = subtitles.map((item) => item.text).join(" ");
+    // Combine all subtitle texts with proper spacing
+    const rawTranscript = subtitles
+      .map((item) => item.text.trim())
+      .filter((text) => text.length > 0)
+      .join(" ");
 
     // Decode HTML entities in the transcript
     const transcript = decodeHtmlEntities(rawTranscript);
 
     return new Response(JSON.stringify({ transcript }), {
       status: 200,
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: responseHeaders,
     });
   } catch (error) {
     console.error("Transcript fetch error:", {
@@ -114,7 +159,9 @@ export async function POST(request) {
       "This video's transcript cannot be accessed. This could be because:\n" +
       "1. The video doesn't have captions enabled\n" +
       "2. The captions are auto-generated\n" +
-      "3. The video owner has disabled transcript access\n\n" +
+      "3. The video owner has disabled transcript access\n" +
+      "4. The video might be region-restricted or private\n" +
+      "5. The request timed out\n\n" +
       "Please try a different video that has manual captions enabled.";
 
     return new Response(
@@ -131,9 +178,7 @@ export async function POST(request) {
       }),
       {
         status: 500,
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: responseHeaders,
       }
     );
   }
